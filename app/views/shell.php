@@ -30,7 +30,7 @@ $clientConfig = [
     <title><?= e($pageTitle) ?></title>
     <link rel="icon" href="<?= e(url('/assets/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="apple-touch-icon" href="<?= e(url('/assets/favicon.svg')) ?>">
-    <link rel="stylesheet" href="<?= e(url('/assets/app.css')) ?>">
+    <link rel="stylesheet" href="<?= e(url('/assets/app.css')) ?>?v=<?= e((string) filemtime(ROOT_PATH . '/public/assets/app.css')) ?>">
     <script nonce="<?= e($nonce) ?>">
         window.DIAR = <?= json_encode($clientConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
     </script>
@@ -52,6 +52,6 @@ $clientConfig = [
         </div>
     </noscript>
 
-    <script src="<?= e(url('/assets/app.js')) ?>" nonce="<?= e($nonce) ?>" defer></script>
+    <script src="<?= e(url('/assets/app.js')) ?>?v=<?= e((string) filemtime(ROOT_PATH . '/public/assets/app.js')) ?>" nonce="<?= e($nonce) ?>" defer></script>
 </body>
 </html>
