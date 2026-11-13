@@ -169,6 +169,10 @@ function api_login(): void
     $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
     $pass  = (string) ($input['password'] ?? '');
 
+    if (login_throttled()) {
+        json_response(['ok' => false, 'error' => 'Terlalu banyak percobaan gagal. Coba lagi dalam beberapa menit.'], 429);
+    }
+
     if (!attempt_login($email, $pass)) {
         json_response(['ok' => false, 'error' => 'Email atau password salah.'], 401);
     }

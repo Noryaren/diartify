@@ -121,7 +121,9 @@
         try { data = await res.json(); } catch (e) { data = null; }
 
         if (res.status === 401) {
-            renderLogin();
+            if (!document.getElementById('login-form')) {
+                renderLogin();
+            }
             throw new Error((data && data.error) || 'Silakan masuk.');
         }
         if (!res.ok || (data && data.ok === false)) {
