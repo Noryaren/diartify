@@ -1,19 +1,15 @@
 <?php
 declare(strict_types=1);
 
-$user      = current_user();
+// Rendered without a user identity: the browser only holds the token in
+// localStorage, so the SPA asks /api/me for the current user.
 $nonce     = csp_nonce();
 $name      = (string) config('app.name', 'Diarify');
-$pageTitle = $user
-    ? $name . ' — Player musik server sendiri'
-    : $name . ' — Musik di server sendiri, tanpa langganan';
+$pageTitle = $name . ' — Musik di server sendiri, tanpa langganan';
 
 $clientConfig = [
-    'base'        => base_path(),
-    'csrf'        => csrf_token(),
-    'user'        => $user,
-    'version'     => '1.0.0',
-    'sessionDays' => max(1, (int) config('app.session_days', 90)),
+    'base'    => base_path(),
+    'version' => '1.0.0',
 ];
 ?>
 <!doctype html>
@@ -31,7 +27,7 @@ $clientConfig = [
     <link rel="icon" href="<?= e(url('/assets/favicon.svg')) ?>" type="image/svg+xml">
     <link rel="apple-touch-icon" href="<?= e(url('/assets/favicon.svg')) ?>">
     <link rel="stylesheet" href="<?= e(url('/assets/app.css')) ?>?v=<?= e((string) filemtime(ROOT_PATH . '/public/assets/app.css')) ?>">
-    <script nonce="<?= e($nonce) ?>">
+    <script nonce="<?= e($nonce) ?>" data-cfasync="false">
         window.DIAR = <?= json_encode($clientConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
     </script>
 </head>
@@ -52,6 +48,6 @@ $clientConfig = [
         </div>
     </noscript>
 
-    <script src="<?= e(url('/assets/app.js')) ?>?v=<?= e((string) filemtime(ROOT_PATH . '/public/assets/app.js')) ?>" nonce="<?= e($nonce) ?>" defer></script>
+    <script src="<?= e(url('/assets/app.js')) ?>?v=<?= e((string) filemtime(ROOT_PATH . '/public/assets/app.js')) ?>" nonce="<?= e($nonce) ?>" data-cfasync="false" defer></script>
 </body>
 </html>

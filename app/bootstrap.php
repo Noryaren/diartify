@@ -14,40 +14,9 @@ ini_set('display_errors', config('app.debug') ? '1' : '0');
 ini_set('log_errors', '1');
 error_reporting(E_ALL);
 
-$sessionDays = max(1, (int) config('app.session_days', 90));
-$sessionLife = $sessionDays * 86400;
-
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    ini_set('session.use_strict_mode', '1');
-    ini_set('session.use_only_cookies', '1');
-    ini_set('session.gc_maxlifetime', (string) $sessionLife);
-
-    session_name('diartify_session');
-    session_set_cookie_params([
-        'lifetime' => $sessionLife,
-        'path'     => '/',
-        'domain'   => '',
-        'secure'   => request_is_https(),
-        'httponly' => true,
-        'samesite' => 'Lax',
-    ]);
-
-    session_start();
-}
-
-// Keep the session cookie sliding while you are actively using the app, so a
-// long listening marathon never ends in a silent log-out.
-if (!empty($_SESSION['user_id']) && !headers_sent()) {
-    $params = session_get_cookie_params();
-    setcookie(session_name(), session_id(), [
-        'expires'  => time() + $sessionLife,
-        'path'     => $params['path'],
-        'domain'   => $params['domain'],
-        'secure'   => $params['secure'],
-        'httponly' => $params['httponly'],
-        'samesite' => $params['samesite'] ?? 'Lax',
-    ]);
-}
+// No session_start() and no session cookie: the browser carries a stateless
+// bearer token (see app/auth.php), which keeps login working behind the
+// Cloudflare Tunnel no matter what the edge does with HTML or cookies.
 
 if (!headers_sent()) {
     $nonce = csp_nonce();

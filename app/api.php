@@ -169,15 +169,13 @@ function api_login(): void
     $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
     $pass  = (string) ($input['password'] ?? '');
 
-    if (login_throttled()) {
-        json_response(['ok' => false, 'error' => 'Terlalu banyak percobaan gagal. Coba lagi dalam beberapa menit.'], 429);
-    }
+    $token = attempt_login($email, $pass);
 
-    if (!attempt_login($email, $pass)) {
+    if ($token === null) {
         json_response(['ok' => false, 'error' => 'Email atau password salah.'], 401);
     }
 
-    json_response(['ok' => true, 'user' => current_user()]);
+    json_response(['ok' => true, 'token' => $token, 'user' => current_user()]);
 }
 
 function api_register(): void
@@ -208,14 +206,13 @@ function api_register(): void
     );
     $stmt->execute([$name, mb_substr($email, 0, 190), password_hash($pass, PASSWORD_DEFAULT)]);
 
-    login_user((int) db()->lastInsertId());
-    json_response(['ok' => true, 'user' => current_user()], 201);
+    $token = login_user((int) db()->lastInsertId());
+    json_response(['ok' => true, 'token' => $token, 'user' => current_user()], 201);
 }
 
 function api_logout(): void
 {
-    verify_csrf();
-    logout_user();
+    // Stateless: the server keeps no token state, the browser drops it.
     json_response(['ok' => true]);
 }
 
@@ -934,10 +931,6 @@ function api_dispatch(string $method, string $path): void
 
         if ($method === 'GET' && $path === '/me') {
             json_response(['ok' => true, 'user' => $user]);
-        }
-
-        if ($method !== 'GET' && $method !== 'HEAD') {
-            verify_csrf();
         }
 
         if ($method === 'GET' && $path === '/home') {

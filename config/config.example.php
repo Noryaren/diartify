@@ -12,9 +12,12 @@ return [
         'base_path' => null,
         // Set to true when the app sits behind a reverse proxy / Cloudflare Tunnel.
         'trust_proxy' => true,
-        // Sessions stay alive this long (sliding): you are not logged out
-        // while listening; an idle browser is forgotten after this window.
-        'session_days' => 90,
+        // Login is stateless (JWT in the browser's localStorage): a token lives
+        // for this many seconds — one year by default.
+        'token_ttl' => 31536000,
+        // Optional: pin the signing secret here. Left unset, one is generated
+        // and kept in storage/jwt.secret.
+        // 'jwt_secret' => '',
     ],
 
     'db' => [

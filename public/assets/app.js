@@ -5,8 +5,35 @@
 (function () {
     'use strict';
 
-    var DIAR = window.DIAR || { base: '', csrf: '', user: null };
+    var DIAR = window.DIAR || { base: '' };
     var $app = document.getElementById('app');
+
+    /* ------------------------------------------------------------------ *
+     * Auth — stateless bearer token kept in localStorage
+     * ------------------------------------------------------------------ */
+
+    var TOKEN_KEY = 'diartify.token';
+
+    function getToken() {
+        try {
+            return localStorage.getItem(TOKEN_KEY) || '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function setToken(token) {
+        try {
+            if (token) localStorage.setItem(TOKEN_KEY, token);
+            else localStorage.removeItem(TOKEN_KEY);
+        } catch (error) {}
+    }
+
+    function clearToken() {
+        try {
+            localStorage.removeItem(TOKEN_KEY);
+        } catch (error) {}
+    }
 
     /* ------------------------------------------------------------------ *
      * Utilities
@@ -106,8 +133,10 @@
             init.headers['Content-Type'] = 'application/json';
             init.body = JSON.stringify(opts.body);
         }
-        if (init.method !== 'GET') {
-            init.headers['X-CSRF-Token'] = DIAR.csrf;
+
+        var token = getToken();
+        if (token) {
+            init.headers['Authorization'] = 'Bearer ' + token;
         }
 
         var res;
@@ -121,7 +150,9 @@
         try { data = await res.json(); } catch (e) { data = null; }
 
         if (res.status === 401) {
+            clearToken();
             if (!document.getElementById('login-form')) {
+                state.user = null;
                 renderLogin();
             }
             throw new Error((data && data.error) || 'Silakan masuk.');
@@ -155,7 +186,7 @@
      * ------------------------------------------------------------------ */
 
     var state = {
-        user: DIAR.user,
+        user: null,
         playlists: [],
         contexts: {},
         ctxSeq: 0,
@@ -650,7 +681,12 @@
                     method: 'POST',
                     body: body
                 });
-                if (data && data.ok) location.reload();
+                if (data && data.ok && data.token) {
+                    setToken(data.token);
+                    location.reload();
+                } else {
+                    throw new Error('Login berhasil tetapi token tidak diterima. Muat ulang halaman lalu coba lagi.');
+                }
             } catch (err) {
                 errBox.hidden = false;
                 errBox.textContent = err.message;
@@ -1816,6 +1852,8 @@
             }
             case 'logout':
                 try { await api('/auth/logout', { method: 'POST', body: {} }); } catch (err) {}
+                clearToken();
+                state.user = null;
                 location.reload();
                 break;
             case 'retry':
@@ -2106,9 +2144,23 @@
      * Boot
      * ------------------------------------------------------------------ */
 
-    function boot() {
-        if (!state.user) {
+    async function boot() {
+        if (!getToken()) {
             renderLogin();
+            return;
+        }
+
+        // The identity lives in the token, not in the HTML: ask the server.
+        try {
+            var data = await api('/me');
+            state.user = data && data.user ? data.user : null;
+        } catch (error) {
+            clearToken();
+            state.user = null;
+        }
+
+        if (!state.user) {
+            if (!document.getElementById('login-form')) renderLogin();
             return;
         }
 

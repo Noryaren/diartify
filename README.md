@@ -23,13 +23,13 @@ JavaScript vanilla. Tidak ada build step, tidak ada layanan pihak ketiga.
 - Admin: pemindaian ulang pustaka lewat API/UI (tombol **Pindai Pustaka**).
 - Multi-user: akun dibuat dari server lewat CLI; setiap pengguna punya
   like, playlist, dan statistik sendiri.
-- Keamanan: `password_hash`, prepared statement, CSRF token, CSP dengan
-  nonce, cookie `HttpOnly` + `SameSite`, throttle login senyap.
+- Keamanan: `password_hash`, prepared statement, login stateless berbasis
+  JWT (tanpa cookie sesi, tanpa CSRF), CSP dengan nonce.
 
 ## Kebutuhan server
 
 - PHP 8.5+ dengan ekstensi: `pdo_mysql`, `gd` (disarankan + WebP), `mbstring`,
-  `json`, `openssl`, `session`.
+  `json`, `openssl`.
 - MariaDB 10.6+ / MySQL 8+ (boleh di Docker).
 - Web server dengan PHP-FPM (contoh: Caddy) dan ruang tulis untuk
   `storage/covers/`.
@@ -101,10 +101,16 @@ scan, dan sampul lama diperbaiki bila kosong.
 ## Keamanan (sederhana, seperti diminta)
 
 - Login hanya email + password — tanpa 2FA, captcha, atau verifikasi.
-- Sesi **90 hari** dan bergeser setiap kunjungan (selama masih login,
-  mendengarkan musik lama tidak akan pernah logout).
-- Token CSRF untuk semua permintaan tulis; CSP header + nonce untuk script.
-- Lambat senyap setelah 5 kali login gagal (5 menit) — hanya di sesi itu.
+- Autentikasi **stateless**: login mengirim JWT (HS256) yang disimpan di
+  `localStorage` browser, lalu dikirim sebagai `Authorization: Bearer` di
+  setiap panggilan API. Tidak ada cookie sesi dan tidak ada state di server,
+  sehingga login tetap jalan di balik Cloudflare Tunnel walau tepiannya
+  merewrite HTML.
+- Token berlaku **1 tahun** (`app.token_ttl`). Untuk mencabut semua token,
+  ganti isi `storage/jwt.secret`.
+- `/stream` dan `/cover` dipanggil lewat tag `<audio>`/`<img>` yang tak bisa
+  mengirim header, jadi URL-nya membawa token yang sama lewat `?t=`.
+- CSP header + nonce untuk script; tanpa cookie, CSRF jadi tidak relevan.
 
 ## Instalasi di server
 

@@ -16,7 +16,7 @@ function config(?string $key = null, mixed $default = null): mixed
                 'timezone'     => 'UTC',
                 'base_path'    => null,
                 'trust_proxy'  => filter_var(getenv('TRUST_PROXY') ?: '1', FILTER_VALIDATE_BOOL),
-                'session_days' => 90,
+                'token_ttl'    => 31536000,
             ],
             'db' => [
                 'dsn'  => getenv('DB_DSN') ?: 'mysql:host=127.0.0.1;port=3307;dbname=diartify;charset=utf8mb4',
@@ -150,7 +150,7 @@ function clean_search_term(mixed $value): string
 
 function song_stream_url(int $songId): string
 {
-    return url('/stream/' . $songId);
+    return with_media_token(url('/stream/' . $songId));
 }
 
 function cover_url(?string $coverKey): string
@@ -158,7 +158,22 @@ function cover_url(?string $coverKey): string
     if ($coverKey === null || $coverKey === '') {
         return '';
     }
-    return url('/cover/' . rawurlencode($coverKey));
+    return with_media_token(url('/cover/' . rawurlencode($coverKey)));
+}
+
+/**
+ * <audio> and <img> cannot send an Authorization header, so media URLs carry
+ * the caller's own bearer token as a "t" query parameter instead.
+ */
+function with_media_token(string $path): string
+{
+    $token = function_exists('auth_token') ? auth_token() : null;
+
+    if ($token === null || $token === '') {
+        return $path;
+    }
+
+    return $path . (str_contains($path, '?') ? '&' : '?') . 't=' . rawurlencode($token);
 }
 
 /**
