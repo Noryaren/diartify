@@ -1,8 +1,40 @@
 # Diarify
 
-Server musik self-hosted ala Navidrome dengan tampilan seperti Spotify.
+**Personal media player** yang terinspirasi dari
+[Navidrome](https://www.navidrome.org) untuk sisi server musiknya, dan dari
+tampilan Spotify untuk sisi pengalamannya — tapi **100% gratis** dan
+**semua datanya sepenuhnya kamu yang kendalikan**.
+
 Dibuat dengan PHP 8.5 murni (tanpa framework/Composer), MariaDB, dan
 JavaScript vanilla. Tidak ada build step, tidak ada layanan pihak ketiga.
+
+> Tidak berafiliasi dengan Navidrome maupun Spotify. Hanya terinspirasi.
+
+## Kenapa Diarify
+
+- **Gratis total, selamanya.** Tidak ada langganan, tidak ada fitur terkunci,
+  tidak ada iklan, tidak ada batas jumlah lagu maupun pengguna. Tidak ada
+  paket "premium" — semua fitur terbuka sejak awal.
+- **Datanya milikmu sepenuhnya.** Berkas musik tetap di folder milikmu, tidak
+  pernah dipindai atau diunggah ke mana pun. Database ada di MariaDB yang kamu
+  hosting sendiri. Sampul album di-cache lokal di `storage/covers/`. Akun,
+  like, playlist, dan statistik pemutaran tersimpan di database milikmu.
+- **Tanpa ketergantungan cloud.** Tidak ada akun pihak ketiga, tidak ada API
+  key, tidak ada telemetri, tidak ada analitik, tidak ada layanan pembayaran.
+  Tidak ada satu byte pun yang dikirim keluar dari servermu.
+- **Bisa dibawa pergi kapan saja.** Tidak ada data yang dikunci di platform:
+  dump MariaDB, salin folder musik dan `storage/`, selesai — pindah server atau
+  berhenti memakai sama sekali tidak perlu meminta izin ke siapa pun.
+- **Ringan untuk server kecil.** Tanpa framework, tanpa build step, tanpa
+  antrian worker: satu proses PHP-FPM dan satu container MariaDB sudah cukup.
+
+### Terinspirasi dari
+
+- **Navidrome** — sisi *server musik self-hosted*: pemindai tag otomatis,
+  streaming dengan HTTP Range, pustaka yang tidak pernah mengubah berkas
+  aslinya, multi-user, dan kontrol penuh atas file di disk.
+- **Spotify** — sisi *tampilan dan interaksi*: tema gelap, kartu album,
+  beranda personal, antrian pemutar, lagu disukai, playlist, dan pencarian.
 
 ## Fitur
 
