@@ -1,0 +1,20 @@
+# Local configuration (contains database credentials and music paths)
+/config/config.php
+
+# Runtime cache: cover art, logs, scanner state
+/storage/*
+!/storage/.gitkeep
+!/storage/covers/
+/storage/covers/*
+!/storage/covers/.gitkeep
+
+# Scratch files
+*.log
+.DS_Store
+Thumbs.db
+.commandcode/
+iseng.txt
+
+# Music library files (folder exists, songs are not committed)
+/musik/*
+!/musik/.gitkeep

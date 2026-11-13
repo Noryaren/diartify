@@ -1,0 +1,34 @@
+# Diarify — contoh blok Caddy.
+# Ganti domain dan path sesuai server. File ini hanya contoh; jangan ditimpa
+# langsung ke /etc/caddy/Caddyfile tanpa menggabungkan situs lain.
+#
+# Pola yang dipakai: Cloudflare Tunnel meneruskan HTTPS dari edge, Caddy
+# cukup melayani HTTP di port 80 (situs lain di server ini juga begitu).
+
+http://music.diaraji.my.id {
+	root * /home/diartify/public
+	encode gzip zstd
+
+	# Cloudflare Zero Trust / Tunnel meneruskan HTTPS dari edge.
+	header {
+		X-Forwarded-Proto "https"
+		X-Forwarded-For {http.request.remote.host}
+		CF-Connecting-IP {http.request.remote.host}
+	}
+
+	# Jangan pernah mengeksekusi file di folder runtime.
+	@blocked path /.*
+	respond @blocked 404
+
+	php_fastcgi unix//run/php/php8.5-fpm.sock {
+		dial_timeout 30s
+		resolve_root_symlink
+
+		# Dibutuhkan supaya request_is_https() melihat HTTPS dari tunnel.
+		env HTTPS on
+		header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+		header_up X-Forwarded-For {http.request.header.X-Forwarded-For}
+	}
+
+	file_server
+}
