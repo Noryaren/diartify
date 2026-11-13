@@ -176,6 +176,38 @@ function api_login(): void
     json_response(['ok' => true, 'user' => current_user()]);
 }
 
+function api_register(): void
+{
+    $input = json_input();
+    $name  = mb_substr(trim((string) ($input['name'] ?? '')), 0, 80);
+    $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
+    $pass  = (string) ($input['password'] ?? '');
+
+    if ($name === '') {
+        throw new ApiException('Nama wajib diisi.', 422);
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new ApiException('Email tidak valid.', 422);
+    }
+    if (strlen($pass) < 6) {
+        throw new ApiException('Password minimal 6 karakter.', 422);
+    }
+
+    $exists = db()->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+    $exists->execute([$email]);
+    if ($exists->fetch()) {
+        throw new ApiException('Email sudah terdaftar.', 409);
+    }
+
+    $stmt = db()->prepare(
+        'INSERT INTO users (name, email, password_hash, is_admin, created_at) VALUES (?, ?, ?, 0, NOW())'
+    );
+    $stmt->execute([$name, mb_substr($email, 0, 190), password_hash($pass, PASSWORD_DEFAULT)]);
+
+    login_user((int) db()->lastInsertId());
+    json_response(['ok' => true, 'user' => current_user()], 201);
+}
+
 function api_logout(): void
 {
     verify_csrf();
@@ -884,6 +916,10 @@ function api_dispatch(string $method, string $path): void
 
         if ($method === 'POST' && $path === '/auth/login') {
             api_login();
+        }
+
+        if ($method === 'POST' && $path === '/auth/register') {
+            api_register();
         }
 
         if ($method === 'POST' && $path === '/auth/logout') {

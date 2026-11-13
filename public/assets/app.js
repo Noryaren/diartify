@@ -593,22 +593,39 @@
      * Login
      * ------------------------------------------------------------------ */
 
-    function renderLogin() {
+    function renderLogin(mode) {
         state.user = null;
+        var isRegister = mode === 'register';
         $app.innerHTML =
             '<div class="login-screen">' +
                 '<form class="login-card" id="login-form" novalidate>' +
                     '<div class="login-brand"><img src="' + h(DIAR.base) + '/assets/logo.svg" alt="">Diarify</div>' +
                     '<p class="login-tagline">Musik milikmu sendiri, tampilan yang kamu suka.</p>' +
-                    '<h1>Masuk</h1>' +
+                    '<h1>' + (isRegister ? 'Daftar' : 'Masuk') + '</h1>' +
                     '<div id="login-error" class="login-error" hidden></div>' +
+                    (isRegister
+                        ? '<div class="field"><label for="login-name">Nama</label>' +
+                            '<input id="login-name" name="name" type="text" autocomplete="name" required maxlength="80" placeholder="Nama kamu"></div>'
+                        : '') +
                     '<div class="field"><label for="login-email">Email</label>' +
                         '<input id="login-email" name="email" type="email" autocomplete="username" required placeholder="kamu@contoh.id"></div>' +
                     '<div class="field"><label for="login-pass">Password</label>' +
-                        '<input id="login-pass" name="password" type="password" autocomplete="current-password" required placeholder="••••••••"></div>' +
-                    '<button class="btn btn-green login-submit" type="submit">Masuk</button>' +
-                    '<p class="login-note">Cukup email dan password — tidak ada kode OTP, tidak ada langganan. ' +
-                    'Sesi kamu bertahan lama selama masih dipakai mendengarkan musik.</p>' +
+                        '<input id="login-pass" name="password" type="password" required placeholder="••••••••" ' +
+                            'autocomplete="' + (isRegister ? 'new-password' : 'current-password') + '"></div>' +
+                    (isRegister
+                        ? '<div class="field"><label for="login-pass2">Ulangi password</label>' +
+                            '<input id="login-pass2" name="password2" type="password" required placeholder="••••••••" autocomplete="new-password"></div>'
+                        : '') +
+                    '<button class="btn btn-green login-submit" type="submit">' + (isRegister ? 'Daftar' : 'Masuk') + '</button>' +
+                    '<p class="login-note">' + (isRegister
+                        ? 'Tanpa email verifikasi, tanpa kode OTP — langsung bisa dipakai. ' +
+                            'Setiap akun punya lagu disukai, playlist, dan statistik sendiri.'
+                        : 'Cukup email dan password — tidak ada kode OTP, tidak ada langganan. ' +
+                            'Sesi kamu bertahan lama selama masih dipakai mendengarkan musik.') + '</p>' +
+                    '<p class="login-switch">' +
+                        '<a href="#" data-login-mode="' + (isRegister ? 'login' : 'register') + '">' +
+                            (isRegister ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar') +
+                        '</a></p>' +
                 '</form>' +
             '</div>';
 
@@ -619,23 +636,34 @@
             errBox.hidden = true;
             var btn = form.querySelector('button[type=submit]');
             btn.disabled = true;
-            btn.textContent = 'Memastikan…';
+            btn.textContent = isRegister ? 'Mendaftar…' : 'Memastikan…';
             try {
-                var data = await api('/auth/login', {
+                var body = isRegister
+                    ? { name: form.name.value.trim(), email: form.email.value.trim(), password: form.password.value }
+                    : { email: form.email.value.trim(), password: form.password.value };
+                if (isRegister && form.password.value !== form.password2.value) {
+                    throw new Error('Password tidak sama.');
+                }
+                var data = await api(isRegister ? '/auth/register' : '/auth/login', {
                     method: 'POST',
-                    body: {
-                        email: form.email.value.trim(),
-                        password: form.password.value
-                    }
+                    body: body
                 });
                 if (data && data.ok) location.reload();
             } catch (err) {
                 errBox.hidden = false;
                 errBox.textContent = err.message;
                 btn.disabled = false;
-                btn.textContent = 'Masuk';
+                btn.textContent = isRegister ? 'Daftar' : 'Masuk';
             }
         });
+
+        var switcher = $app.querySelector('[data-login-mode]');
+        if (switcher) {
+            switcher.addEventListener('click', function (e) {
+                e.preventDefault();
+                renderLogin(switcher.getAttribute('data-login-mode'));
+            });
+        }
     }
 
     /* ------------------------------------------------------------------ *
