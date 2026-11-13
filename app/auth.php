@@ -35,6 +35,7 @@ function jwt_secret(): string
         if ($existing === false) {
             // Silently falling back to a random secret here would invalidate
             // every token on each request, i.e. break login without a trace.
+            $GLOBALS['diartify_jwt_secret_broken'] = true;
             error_log(
                 'diartify: tidak bisa membaca ' . $file
                 . ' — pastikan user web (www-data) boleh membacanya.'
@@ -56,12 +57,25 @@ function jwt_secret(): string
     }
 
     if (@file_put_contents($file, $secret, LOCK_EX) === false) {
+        $GLOBALS['diartify_jwt_secret_broken'] = true;
         error_log('diartify: tidak bisa menyimpan secret JWT di ' . $file);
     } else {
         @chmod($file, 0600);
     }
 
     return $secret;
+}
+
+/**
+ * True when the signing secret cannot be persisted, which would make every
+ * freshly issued token invalid on the next request. Login must say so out
+ * loud instead of looping back to the login screen forever.
+ */
+function jwt_secret_broken(): bool
+{
+    jwt_secret();
+
+    return !empty($GLOBALS['diartify_jwt_secret_broken']);
 }
 
 function token_ttl(): int

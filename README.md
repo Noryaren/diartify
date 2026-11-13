@@ -154,7 +154,12 @@ Contoh di `/home/diartify`:
 sudo mkdir -p /home/diartify
 sudo rsync -a --exclude 'config/config.php' ./ /home/diartify/
 sudo chown -R www-data:www-data /home/diartify/storage
-sudo chmod -R 775 /home/diartify/storage
+# huruf besar X: folder dapat eksekusi, berkas biasa tetap 664 (tidak ikut
+# jadi executable seperti kalau memakai chmod -R 775).
+sudo chmod -R u=rwX,g=rwX,o=rX /home/diartify/storage
+# Rahasia JWT harus hanya terbaca oleh user web — kalau berpindah tangan,
+# semua token jadi tidak valid dan login berputar-putar di halaman masuk.
+sudo chmod 600 /home/diartify/storage/jwt.secret 2>/dev/null || true
 ```
 
 ### 2. Buat database
@@ -210,6 +215,27 @@ Arahkan `music_paths` ke `/opt/navidrome/music` (contoh), pastikan user
 ```bash
 sudo setfacl -R -m u:www-data:rX /opt/navidrome/music
 ```
+
+## Penyelesaian masalah
+
+**Login berputar-putar: halaman berkedip lalu kembali ke layar masuk tanpa
+pesan error.** Penyebabnya hampir selalu `storage/jwt.secret` tidak bisa
+dibaca oleh user web (mis. ownership-nya berubah karena ada yang menjalankan
+`chown -R` di atas `/home/diartify`). Akibatnya tiap request membuat token
+dengan rahasia acak, sehingga token yang baru diterima tidak pernah valid.
+
+```bash
+sudo chown -R www-data:www-data /home/diartify/storage
+sudo chmod 600 /home/diartify/storage/jwt.secret
+```
+
+Aplikasi kini menampilkan pesan error yang jelas di layar login bila kondisi
+ini terjadi, bukan berputar diam-diam. Gejala serupa juga muncul kalau
+`storage/` tidak bisa ditulis (caching sampul gagal).
+
+**Sampul album tidak muncul.** Pastikan `storage/covers/` bisa ditulis oleh
+`www-data` (perintah `chown` di atas). Pemindaian yang dijalankan dari UI
+menulis sampul sebagai `www-data`.
 
 ## Format yang didukung
 

@@ -165,6 +165,15 @@ function api_health(): void
 
 function api_login(): void
 {
+    if (jwt_secret_broken()) {
+        json_response([
+            'ok'    => false,
+            'error' => 'Konfigurasi login rusak: storage/jwt.secret tidak bisa dibaca oleh '
+                . 'user web (www-data), jadi token tidak pernah valid. Perbaiki dengan: '
+                . 'sudo chown -R www-data:www-data /home/diartify/storage',
+        ], 500);
+    }
+
     $input = json_input();
     $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
     $pass  = (string) ($input['password'] ?? '');
@@ -180,6 +189,15 @@ function api_login(): void
 
 function api_register(): void
 {
+    if (jwt_secret_broken()) {
+        json_response([
+            'ok'    => false,
+            'error' => 'Konfigurasi login rusak: storage/jwt.secret tidak bisa dibaca oleh '
+                . 'user web (www-data), jadi token tidak pernah valid. Perbaiki dengan: '
+                . 'sudo chown -R www-data:www-data /home/diartify/storage',
+        ], 500);
+    }
+
     $input = json_input();
     $name  = mb_substr(trim((string) ($input['name'] ?? '')), 0, 80);
     $email = mb_strtolower(trim((string) ($input['email'] ?? '')));
