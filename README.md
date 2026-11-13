@@ -130,7 +130,7 @@ Pemindai aman dijalankan berulang: file yang tak berubah dilewati, file
 yang dihapus dibersihkan dari database, tag yang rusak tidak menghentikan
 scan, dan sampul lama diperbaiki bila kosong.
 
-## Keamanan (sederhana, seperti diminta)
+## Keamanan
 
 - Login hanya email + password — tanpa 2FA, captcha, atau verifikasi.
 - Autentikasi **stateless**: login mengirim JWT (HS256) yang disimpan di
