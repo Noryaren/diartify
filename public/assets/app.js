@@ -814,6 +814,10 @@
         if (!list) return;
 
         var html = '';
+        html += '<li><a class="side-item" href="#/all">' +
+            '<span class="cover-ph" style="--hue:150;width:36px;height:36px;border-radius:4px;display:grid;place-items:center;font-size:15px">' +
+            icon('music') + '</span>' +
+            '<span class="side-item-text"><b>Semua Lagu</b><span>Putar seluruh pustaka</span></span></a></li>';
         html += '<li><a class="side-item" href="#/liked">' +
             '<span class="cover-ph" style="--hue:270;width:36px;height:36px;border-radius:4px;display:grid;place-items:center;font-size:15px">' +
             icon('heart-filled') + '</span>' +
@@ -850,7 +854,7 @@
             var active =
                 (key === 'home' && (hash === '#/' || hash === '')) ||
                 (key === 'search' && hash.indexOf('#/search') === 0) ||
-                (key === 'library' && hash.indexOf('#/') === 0 && ['#/playlists', '#/songs', '#/albums', '#/artists', '#/liked', '#/playlist/', '#/album/', '#/artist/'].some(function (p) {
+                (key === 'library' && hash.indexOf('#/') === 0 && ['#/playlists', '#/songs', '#/all', '#/albums', '#/artists', '#/liked', '#/playlist/', '#/album/', '#/artist/'].some(function (p) {
                     return hash.indexOf(p) === 0;
                 }));
             el.classList.toggle('active', active);
@@ -1082,6 +1086,7 @@
             else if (p === '/artists') html = await viewArtists();
             else if (p.indexOf('/artist/') === 0) html = await viewArtist(parseInt(p.slice(8), 10));
             else if (p === '/songs') html = await viewSongs(route.query);
+            else if (p === '/all') html = await viewAllSongs(route.query);
             else if (p === '/liked') html = await viewLiked(route.query);
             else if (p === '/playlists') html = await viewPlaylists();
             else if (p.indexOf('/playlist/') === 0) html = await viewPlaylist(parseInt(p.slice(10), 10));
@@ -1327,8 +1332,9 @@
         var ctxId = ctx(data.items);
 
         var html = '<div class="page">' +
-            '<h1 class="page-title">Semua Lagu</h1>' +
-            '<p class="page-sub">' + data.total + ' lagu • klik lagu untuk memutar</p>' +
+            '<h1 class="page-title">Daftar Lagu</h1>' +
+            '<p class="page-sub">Menampilkan ' + data.items.length + ' dari ' + data.total +
+                ' lagu • <a href="#/all" style="color:inherit;text-decoration:underline">putar semua lagu</a></p>' +
             '<div class="side-chips" style="padding:0 0 14px">' +
                 chipLink('#/songs?sort=recent', 'Terbaru', sort === 'recent') +
                 chipLink('#/songs?sort=title', 'Judul', sort === 'title') +
@@ -1340,6 +1346,78 @@
             trackTable(data.items, { ctxId: ctxId, thumb: true }) +
         '</div>';
 
+        return html;
+    }
+
+    /* Muat SELURUH lagu di server (bukan cuma 100) dengan paging. */
+    async function fetchAllSongs(sort) {
+        var limit = 200;
+        var all = [];
+        var offset = 0;
+        var total = Infinity;
+
+        while (all.length < total) {
+            var page = await api('/songs?sort=' + encodeURIComponent(sort) +
+                '&limit=' + limit + '&offset=' + offset);
+            var items = page.items || [];
+            total = page.total || 0;
+            if (!items.length) break;
+            all = all.concat(items);
+            offset += items.length;
+            if (items.length < limit) break;
+        }
+        return { items: all, total: total };
+    }
+
+    /* Halaman "Semua Lagu": seluruh pustaka sebagai satu playlist raksasa. */
+    async function viewAllSongs(query) {
+        var sort = query.sort || 'title';
+        var data = await fetchAllSongs(sort);
+        var songs = data.items;
+        state.view.songs = songs.slice();
+        var ctxId = ctx(songs);
+
+        var totalMs = songs.reduce(function (sum, s) { return sum + (s.durationMs || 0); }, 0);
+
+        var html = '<section class="hero">' +
+            '<div class="hero-cover cover-ph" style="--hue:150"><span>♫</span></div>' +
+            '<div class="hero-meta">' +
+                '<p class="hero-label">Playlist</p>' +
+                '<h1 class="hero-title">Semua Lagu</h1>' +
+                '<div class="hero-info"><span><b>' + songs.length + '</b> lagu</span>' +
+                    (totalMs ? '<span class="dot">' + fmtTotal(totalMs) + '</span>' : '') +
+                    '<span class="dot">seluruh pustaka, apa pun albumnya</span>' +
+                '</div>' +
+            '</div>' +
+        '</section>';
+
+        if (songs.length) {
+            /* Tampilkan maksimum 500 baris agar tetap ringan; antrean tetap berisi
+               seluruh lagu (index baris sama dengan index antrean). */
+            var shown = songs.slice(0, 500);
+            html += '<div class="hero-actions">' +
+                '<button class="play-fab" data-act="play-context" data-ctx="' + h(ctxId) + '" aria-label="Putar semua lagu">' + icon('play') + '</button>' +
+                '<button class="btn btn-outline" data-act="shuffle-context" data-ctx="' + h(ctxId) + '">' + icon('shuffle') + ' Acak</button>' +
+            '</div>' +
+            '<div class="page no-topbar-pad" style="padding-top:14px">' +
+                '<div class="side-chips" style="padding:0 0 14px">' +
+                    chipLink('#/all?sort=title', 'Judul', sort === 'title') +
+                    chipLink('#/all?sort=artist', 'Artis', sort === 'artist') +
+                    chipLink('#/all?sort=album', 'Album', sort === 'album') +
+                    chipLink('#/all?sort=recent', 'Terbaru', sort === 'recent') +
+                    chipLink('#/all?sort=plays', 'Paling diputar', sort === 'plays') +
+                '</div>' +
+                (songs.length > shown.length
+                    ? '<p class="page-sub" style="margin:0 0 10px">Menampilkan ' + shown.length + ' pertama dari ' + songs.length +
+                      ' lagu — tombol putar tetap memutar semuanya.</p>'
+                    : '') +
+                trackTable(shown, { ctxId: ctxId, thumb: true }) +
+            '</div>';
+        } else {
+            html += '<div class="page no-topbar-pad">' +
+                emptyState('music', 'Pustaka masih kosong', 'Jalankan pemindaian pustaka untuk mulai mengisi.') +
+            '</div>';
+        }
         return html;
     }
 
