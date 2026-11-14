@@ -188,6 +188,7 @@
     var state = {
         user: null,
         playlists: [],
+        adminUsers: null,
         contexts: {},
         ctxSeq: 0,
         view: null,
@@ -767,6 +768,7 @@
                         '</button>' +
                         '<div class="user-menu" id="user-menu">' +
                             '<div class="user-menu-head"><b>' + h(user.name) + '</b><span>' + h(user.email) + '</span></div>' +
+                            (isAdmin ? '<button data-act="admin-users">' + icon('user') + 'Kelola Pengguna</button>' : '') +
                             '<button data-act="logout">' + icon('logout') + 'Keluar</button>' +
                         '</div>' +
                     '</header>' +
@@ -2126,6 +2128,22 @@
             case 'scan':
                 runScan();
                 break;
+
+            /* admin — user CRUD */
+            case 'admin-users':
+                e.stopPropagation();
+                document.getElementById('user-menu').classList.remove('open');
+                openAdminUsers();
+                break;
+            case 'user-new':
+                openUserForm(null);
+                break;
+            case 'user-edit':
+                openUserForm(parseInt(id, 10));
+                break;
+            case 'user-delete':
+                confirmDeleteUser(parseInt(id, 10));
+                break;
         }
     });
 
@@ -2176,6 +2194,199 @@
                         toast('Playlist dihapus.');
                         go('#/playlists');
                     } catch (err) { toast(err.message, 'error'); }
+                });
+            }
+        });
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Admin — user management
+     * ------------------------------------------------------------------ */
+
+    function fmtDate(s) {
+        return String(s || '').slice(0, 10);
+    }
+
+    /** id akun yang sedang masuk, atau -1. */
+    function meId() {
+        return state.user ? state.user.id : -1;
+    }
+
+    async function openAdminUsers() {
+        var body = '<div id="admin-users-list" style="display:grid;gap:8px">' +
+            '<p style="margin:4px 0;color:var(--sub)">Memuat…</p></div>';
+
+        openModal({
+            title: 'Kelola Pengguna',
+            body: body,
+            foot: '<button class="btn btn-outline" data-act="modal-close">Tutup</button>' +
+                  '<button class="btn btn-green" data-act="user-new">' + icon('plus') + ' Tambah user</button>'
+        });
+
+        await refreshAdminUsers();
+    }
+
+    async function refreshAdminUsers() {
+        var list = document.getElementById('admin-users-list');
+        if (!list) return;
+
+        var data;
+        try {
+            data = await api('/admin/users?limit=200');
+        } catch (err) {
+            list.innerHTML = '<p style="color:#ff8a8a;margin:4px 0">' + h(err.message) + '</p>';
+            return;
+        }
+
+        var users = data.items || [];
+        var me = meId();
+
+        if (!users.length) {
+            list.innerHTML = '<p style="margin:4px 0;color:var(--sub)">Belum ada user.</p>';
+            return;
+        }
+
+        list.innerHTML = users.map(function (u) {
+            var mine = u.id === me;
+            return '<div class="playlist-pick" style="cursor:default;align-items:flex-start">' +
+                '<div class="cover-ph" style="--hue:' + hueOf(u.name) + '"><span>' + initial(u.name) + '</span></div>' +
+                '<div style="flex:1;min-width:0">' +
+                    '<b>' + h(u.name) + (mine ? ' <span style="color:var(--sub);font-weight:400">(kamu)</span>' : '') + '</b>' +
+                    '<span style="word-break:break-all">' + h(u.email) + '</span>' +
+                    '<span>' +
+                        (u.is_admin
+                            ? '<b style="color:var(--accent-bright)">Admin</b>'
+                            : 'User') +
+                        ' • daftar ' + h(fmtDate(u.created_at)) +
+                        (u.playlist_count ? ' • ' + u.playlist_count + ' playlist' : '') +
+                    '</span>' +
+                '</div>' +
+                '<span style="display:flex;gap:6px;flex:none">' +
+                    '<button class="icon-btn" data-act="user-edit" data-id="' + u.id + '" title="Ubah" aria-label="Ubah user">' + icon('edit') + '</button>' +
+                    '<button class="icon-btn" data-act="user-delete" data-id="' + u.id + '" title="Hapus" aria-label="Hapus user"' +
+                        (mine ? ' disabled style="opacity:.35"' : '') + '>' + icon('trash') + '</button>' +
+                '</span>' +
+            '</div>';
+        }).join('');
+
+        // Simpan hasil terakhir supaya form edit tidak perlu fetch ulang.
+        state.adminUsers = users;
+    }
+
+    function openUserForm(userId) {
+        var users = state.adminUsers || [];
+        var u = null;
+        if (userId != null) {
+            u = users.find(function (x) { return x.id === userId; }) || null;
+            if (!u) {
+                toast('User tidak ditemukan.', 'error');
+                return;
+            }
+        }
+
+        var isNew = !u;
+        var canToggleAdmin = !u || u.id !== meId();
+
+        openModal({
+            title: isNew ? 'Tambah user' : 'Ubah user',
+            body:
+                '<div class="field"><label for="u-name">Nama</label>' +
+                '<input id="u-name" maxlength="80" value="' + h(u ? u.name : '') + '" placeholder="Nama tampilan"></div>' +
+                '<div class="field"><label for="u-email">Email</label>' +
+                '<input id="u-email" type="email" value="' + h(u ? u.email : '') + '" placeholder="nama@contoh.id"></div>' +
+                '<div class="field"><label for="u-pass">' +
+                    (isNew ? 'Password' : 'Password baru') + '</label>' +
+                '<input id="u-pass" type="password" autocomplete="new-password" placeholder="' +
+                    (isNew ? 'Minimal 6 karakter' : 'Kosongkan untuk tetap sama') + '">' +
+                (isNew ? '' : '<span class="hint">Kosongkan jika tidak diganti.</span>') + '</div>' +
+                (canToggleAdmin
+                    ? '<label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer">' +
+                      '<input id="u-admin" type="checkbox"' + (u && u.is_admin ? ' checked' : '') + '> Jadikan admin' +
+                      '</label>'
+                    : '<p class="hint" style="margin:0;color:var(--subtle)">Status admin akunmu sendiri tidak bisa diubah di sini.</p>'),
+            foot: '<button class="btn btn-outline" data-act="modal-close">Batal</button>' +
+                  '<button class="btn btn-green" id="u-save">' + (isNew ? 'Tambah' : 'Simpan') + '</button>',
+            onMount: function (modal) {
+                var save = async function () {
+                    var btn = modal.querySelector('#u-save');
+                    var name = modal.querySelector('#u-name').value.trim();
+                    var email = modal.querySelector('#u-email').value.trim();
+                    var pass = modal.querySelector('#u-pass').value;
+                    var adminBox = modal.querySelector('#u-admin');
+                    var payload = {
+                        name: name,
+                        email: email,
+                        password: pass,
+                        is_admin: adminBox ? adminBox.checked : (u ? u.is_admin : false)
+                    };
+
+                    btn.disabled = true;
+                    try {
+                        if (isNew) {
+                            await api('/admin/users', { method: 'POST', body: payload });
+                            toast('User "' + name + '" ditambahkan.');
+                        } else {
+                            await api('/admin/users/' + u.id, { method: 'PATCH', body: payload });
+                            toast('User diperbarui.');
+                        }
+                        // Kalau akun sendiri yang diubah, identity di token perlu disegarkan.
+                        if (!isNew && u.id === (state.user ? state.user.id : -1)) {
+                            try {
+                                var me = await api('/me');
+                                if (me && me.user) state.user = me.user;
+                            } catch (err) { /* abaikan */ }
+                        }
+                        await openAdminUsers();
+                        if (!isNew && u.id === (meId())) {
+                            renderShell();
+                            route(true);
+                        }
+                    } catch (err) {
+                        toast(err.message, 'error');
+                        btn.disabled = false;
+                    }
+                };
+
+                modal.querySelector('#u-save').addEventListener('click', save);
+                modal.querySelectorAll('#u-name, #u-email, #u-pass').forEach(function (el) {
+                    el.addEventListener('keydown', function (e) {
+                        if (e.key === 'Enter') { e.preventDefault(); save(); }
+                    });
+                });
+            }
+        });
+    }
+
+    function confirmDeleteUser(userId) {
+        var users = state.adminUsers || [];
+        var u = users.find(function (x) { return x.id === userId; });
+        if (!u) { toast('User tidak ditemukan.', 'error'); return; }
+
+        var selfId = meId();
+        if (u.id === selfId) {
+            toast('Tidak bisa menghapus akun yang sedang masuk.', 'error');
+            return;
+        }
+
+        openModal({
+            title: 'Hapus user?',
+            body: '<p style="margin:4px 0;color:var(--sub)">User <b style="color:#fff">' + h(u.name) +
+                '</b> (' + h(u.email) + ') akan dihapus permanen beserta playlist miliknya. ' +
+                'Lagu di pustaka tetap aman.</p>',
+            foot: '<button class="btn btn-outline" data-act="modal-close">Batal</button>' +
+                  '<button class="btn btn-danger" id="del-user">Hapus</button>',
+            onMount: function (modal) {
+                modal.querySelector('#del-user').addEventListener('click', async function () {
+                    var btn = modal.querySelector('#del-user');
+                    btn.disabled = true;
+                    try {
+                        await api('/admin/users/' + u.id, { method: 'DELETE' });
+                        await openAdminUsers();
+                        toast('User "' + u.name + '" dihapus.');
+                    } catch (err) {
+                        toast(err.message, 'error');
+                        btn.disabled = false;
+                    }
                 });
             }
         });

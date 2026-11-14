@@ -921,6 +921,171 @@ function api_scan_status(): void
 }
 
 /* -------------------------------------------------------------------------
+ * Admin — user management (CRUD)
+ * ---------------------------------------------------------------------- */
+
+/** Number of accounts that still hold the admin flag. */
+function admin_count(): int
+{
+    $n = db()->query('SELECT COUNT(*) FROM users WHERE is_admin = 1')->fetchColumn();
+
+    return (int) $n;
+}
+
+function api_admin_users(): void
+{
+    require_admin();
+
+    [$limit, $offset] = api_paging(200);
+
+    $total = (int) db()->query('SELECT COUNT(*) FROM users')->fetchColumn();
+
+    $stmt = db()->query(
+        'SELECT u.id, u.name, u.email, u.is_admin, u.created_at,
+                (SELECT COUNT(*) FROM playlists p WHERE p.user_id = u.id) AS playlist_count
+         FROM users u
+         ORDER BY u.is_admin DESC, u.created_at ASC, u.id ASC
+         LIMIT ' . (int) $limit . ' OFFSET ' . (int) $offset
+    );
+
+    $items = array_map(static function (array $row): array {
+        $row['id']       = (int) $row['id'];
+        $row['is_admin'] = (int) $row['is_admin'] === 1;
+
+        return $row;
+    }, $stmt->fetchAll());
+
+    json_response(['ok' => true, 'items' => $items, 'total' => $total]);
+}
+
+/** Validate the shared create/update payload. Returns normalised fields. */
+function admin_user_input(array $input, bool $isUpdate, ?int $userId = null): array
+{
+    $name    = mb_substr(trim((string) ($input['name'] ?? '')), 0, 80);
+    $email   = mb_strtolower(trim((string) ($input['email'] ?? '')));
+    $pass    = (string) ($input['password'] ?? '');
+    $isAdmin = !empty($input['is_admin']);
+
+    if ($name === '') {
+        throw new ApiException('Nama wajib diisi.', 422);
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        throw new ApiException('Email tidak valid.', 422);
+    }
+    // On update an empty password means "keep the current one".
+    if ($pass !== '' && strlen($pass) < 6) {
+        throw new ApiException('Password minimal 6 karakter.', 422);
+    }
+
+    $sql    = 'SELECT id FROM users WHERE email = ? LIMIT 1';
+    $params = [$email];
+    if ($isUpdate && $userId !== null) {
+        $sql    = 'SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1';
+        $params[] = $userId;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    if ($stmt->fetch()) {
+        throw new ApiException('Email sudah dipakai user lain.', 409);
+    }
+
+    return ['name' => $name, 'email' => $email, 'password' => $pass, 'is_admin' => $isAdmin];
+}
+
+function api_admin_user_create(): void
+{
+    require_admin();
+
+    $in = admin_user_input(json_input(), false);
+
+    $stmt = db()->prepare(
+        'INSERT INTO users (name, email, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, NOW())'
+    );
+    $stmt->execute([
+        $in['name'],
+        mb_substr($in['email'], 0, 190),
+        password_hash($in['password'], PASSWORD_DEFAULT),
+        $in['is_admin'] ? 1 : 0,
+    ]);
+
+    $id = (int) db()->lastInsertId();
+    $row = db()->prepare('SELECT id, name, email, is_admin, created_at FROM users WHERE id = ?');
+    $row->execute([$id]);
+    $user = $row->fetch();
+    $user['id']       = (int) $user['id'];
+    $user['is_admin'] = (int) $user['is_admin'] === 1;
+
+    json_response(['ok' => true, 'user' => $user], 201);
+}
+
+function api_admin_user_update(int $userId): void
+{
+    $me    = require_admin();
+    $input = json_input();
+
+    $stmt = db()->prepare('SELECT id, name, email, is_admin FROM users WHERE id = ?');
+    $stmt->execute([$userId]);
+    $before = $stmt->fetch();
+    if (!$before) {
+        throw new ApiException('User tidak ditemukan.', 404);
+    }
+
+    $in = admin_user_input($input, true, $userId);
+
+    // Never let the last admin lock everyone out of the panel.
+    if ((int) $before['is_admin'] === 1 && !$in['is_admin'] && admin_count() <= 1) {
+        throw new ApiException('Tidak bisa mencabut admin terakhir. Jadikan admin lain dulu.', 409);
+    }
+
+    $fields = [];
+    $params = [];
+
+    $fields[] = 'name = ?';
+    $params[] = $in['name'];
+
+    if ($in['email'] !== '') {
+        $fields[] = 'email = ?';
+        $params[] = mb_substr($in['email'], 0, 190);
+    }
+    $fields[] = 'is_admin = ?';
+    $params[] = $in['is_admin'] ? 1 : 0;
+
+    if ($in['password'] !== '') {
+        $fields[] = 'password_hash = ?';
+        $params[] = password_hash($in['password'], PASSWORD_DEFAULT);
+    }
+
+    $params[] = $userId;
+    db()->prepare('UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?')->execute($params);
+
+    json_response(['ok' => true, 'user_id' => $userId, 'self' => $userId === (int) $me['id']]);
+}
+
+function api_admin_user_delete(int $userId): void
+{
+    $me = require_admin();
+
+    if ($userId === (int) $me['id']) {
+        throw new ApiException('Tidak bisa menghapus akun yang sedang masuk.', 409);
+    }
+
+    $stmt = db()->prepare('SELECT id, is_admin FROM users WHERE id = ?');
+    $stmt->execute([$userId]);
+    $target = $stmt->fetch();
+    if (!$target) {
+        throw new ApiException('User tidak ditemukan.', 404);
+    }
+
+    if ((int) $target['is_admin'] === 1 && admin_count() <= 1) {
+        throw new ApiException('Tidak bisa menghapus admin terakhir.', 409);
+    }
+
+    db()->prepare('DELETE FROM users WHERE id = ?')->execute([$userId]);
+
+    json_response(['ok' => true, 'user_id' => $userId]);
+}
+
+/* -------------------------------------------------------------------------
  * Dispatch
  * ---------------------------------------------------------------------- */
 
@@ -1038,6 +1203,26 @@ function api_dispatch(string $method, string $path): void
 
         if ($method === 'GET' && $path === '/scan/status') {
             api_scan_status();
+        }
+
+        /* Admin — user CRUD */
+        if (preg_match('#^/admin/users$#', $path)) {
+            if ($method === 'GET') {
+                api_admin_users();
+            }
+            if ($method === 'POST') {
+                api_admin_user_create();
+            }
+        }
+
+        if (preg_match('#^/admin/users/(\d+)$#', $path, $m)) {
+            $uid = (int) $m[1];
+            if ($method === 'PATCH') {
+                api_admin_user_update($uid);
+            }
+            if ($method === 'DELETE') {
+                api_admin_user_delete($uid);
+            }
         }
 
         throw new ApiException('Endpoint tidak ditemukan.', 404);
